@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"log"
 	"net"
+	"time"
 )
 
 const (
 	MAX_REQUEST_SIZE = 2 * 1024 * 1024
 	READ_BUFFER      = 4 * 1024
+	READ_TIMEOUT     = time.Second * 10
+	WRITE_TIMEOUT    = time.Second * 10
 )
 
 func main() {
@@ -28,6 +31,8 @@ func main() {
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(READ_TIMEOUT))
 
 	buffer := make([]byte, READ_BUFFER)      // No global default, set accordingly
 	req := make([]byte, 0, MAX_REQUEST_SIZE) // Again Http doesnt provide this, depends on server logic
@@ -58,5 +63,11 @@ func handleConnection(conn net.Conn) {
 		"\r\n" +
 		"Hello"
 	respByte := []byte(resp)
-	conn.Write(respByte)
+
+	conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
+
+	_, err := conn.Write(respByte)
+	if err != nil {
+		log.Printf("Write Error :%v", err)
+	}
 }
