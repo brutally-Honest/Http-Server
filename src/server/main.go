@@ -6,47 +6,57 @@ import (
 	"net"
 )
 
-const MAX_REQ_SIZE = 1024
+const (
+	MAX_REQUEST_SIZE = 2 * 1024 * 1024
+	READ_BUFFER      = 4 * 1024
+)
 
 func main() {
-	listener, err := net.Listen("tcp", "127.0.0.1:1783")
+	log.Print("Server started")
+	listener, err := net.Listen("tcp", ":1783")
 	if err != nil {
 		log.Fatalf("Listening Socket Error : %v", err)
 	}
-	conn, err := listener.Accept()
-	if err != nil {
-		log.Fatalf("Connection Error : %v", err)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Connection Error : %v", err)
+		}
+		go handleConnection(conn)
 	}
-	log.Println("Remote:", conn.RemoteAddr())
-	log.Println("Local:", conn.LocalAddr())
+}
 
-	buffer := make([]byte, 80)
-	req := make([]byte, 0, MAX_REQ_SIZE)
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	buffer := make([]byte, READ_BUFFER)      // No global default, set accordingly
+	req := make([]byte, 0, MAX_REQUEST_SIZE) // Again Http doesnt provide this, depends on server logic
+
 	for {
 		streamLength, err := conn.Read(buffer)
 		if err != nil {
-			log.Fatalf("Internal Error :%v", err)
-		}
-		log.Printf("Data :%v , StreamLength : %d", string(buffer[:streamLength]), streamLength)
-		if len(req)+streamLength > MAX_REQ_SIZE {
-			conn.Close()
+			log.Printf("Read Error :%v", err)
 			return
 		}
+
+		log.Printf("Data : \n%v,StreamLength : %d\n", string(buffer[:streamLength]), streamLength)
+		if len(req)+streamLength > MAX_REQUEST_SIZE {
+			return
+		}
+
 		req = append(req, buffer[:streamLength]...)
 		if bytes.Contains(req, []byte("\r\n\r\n")) {
 			break
 		}
 
 	}
-	log.Print("Request", string(req))
+	log.Printf("Full Request : %s\n", string(req))
+
 	resp := "HTTP/1.1 200 OK\r\n" +
 		"Content-Length: 5\r\n" +
 		"Content-Type: text/plain\r\n" +
 		"\r\n" +
 		"Hello"
 	respByte := []byte(resp)
-	log.Print("Response BYtes Length:", len(respByte))
-	n, err := conn.Write(respByte)
-	log.Print("Written Data Length :", n)
-	conn.Close()
+	conn.Write(respByte)
 }
