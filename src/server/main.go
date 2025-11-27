@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -37,6 +39,8 @@ func handleConnection(conn net.Conn) {
 	buffer := make([]byte, READ_BUFFER)      // No global default, set accordingly
 	req := make([]byte, 0, MAX_REQUEST_SIZE) // Again Http doesnt provide this, depends on server logic
 
+	i := 0
+	var headerIdx = -1
 	for {
 		streamLength, err := conn.Read(buffer)
 		if err != nil {
@@ -46,16 +50,27 @@ func handleConnection(conn net.Conn) {
 
 		log.Printf("Data : \n%v,StreamLength : %d\n", string(buffer[:streamLength]), streamLength)
 		if len(req)+streamLength > MAX_REQUEST_SIZE {
+			log.Printf("Maximum Request size limit breached")
 			return
 		}
 
 		req = append(req, buffer[:streamLength]...)
+		i++
 		if bytes.Contains(req, []byte("\r\n\r\n")) {
+			headerIdx = bytes.Index(req, []byte("\r\n\r\n"))
 			break
 		}
-
 	}
-	log.Printf("Full Request : %s\n", string(req))
+	log.Printf("%d Chunks", i)
+
+	headers := req[:headerIdx]
+	contentLength, p_err := parseContentLength(headers)
+	if p_err != nil {
+		log.Print(p_err)
+	}
+	log.Println("Content Length:", contentLength)
+
+	log.Printf("Full Request Length: %d\n", len(req))
 
 	resp := "HTTP/1.1 200 OK\r\n" +
 		"Content-Length: 5\r\n" +
@@ -70,4 +85,42 @@ func handleConnection(conn net.Conn) {
 	if err != nil {
 		log.Printf("Write Error :%v", err)
 	}
+}
+
+func parseContentLength(headers []byte) (int, error) {
+	lines := bytes.Split(headers, []byte("\r\n"))
+	found := false
+	var length int
+
+	for _, line := range lines {
+		if len(line) < 15 {
+			continue
+		}
+
+		// Use EqualFold - case-insensitive without allocation
+		if !bytes.EqualFold(line[:15], []byte("content-length:")) {
+			continue
+		}
+
+		// Multiple Content-Length headers = error
+		if found {
+			return 0, fmt.Errorf("multiple Content-Length headers")
+		}
+
+		value := bytes.TrimSpace(line[15:])
+
+		n, err := strconv.Atoi(string(value))
+		if err != nil {
+			return 0, fmt.Errorf("invalid Content-Length value: %w", err)
+		}
+
+		if n < 0 {
+			return 0, fmt.Errorf("negative Content-Length: %d", n)
+		}
+
+		length = n
+		found = true
+	}
+
+	return length, nil
 }
