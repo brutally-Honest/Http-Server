@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"bytes"
@@ -7,39 +7,17 @@ import (
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/brutally-Honest/http-server/internal/config"
 )
 
-const (
-	MAX_REQUEST_SIZE = 2 * 1024 * 1024
-	READ_BUFFER      = 4 * 1024
-	READ_TIMEOUT     = time.Second * 10
-	WRITE_TIMEOUT    = time.Second * 10
-)
+func ParseRequest(conn net.Conn, cfg *config.Config) {
 
-func main() {
-	log.Print("Server started")
-	listener, err := net.Listen("tcp", ":1783")
-	if err != nil {
-		log.Fatalf("Listening Socket Error : %v", err)
-	}
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Connection Error : %v", err)
-		}
-		go handleConnection(conn)
-	}
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	conn.SetReadDeadline(time.Now().Add(READ_TIMEOUT))
-
-	buffer := make([]byte, READ_BUFFER)      // No global default, set accordingly
-	req := make([]byte, 0, MAX_REQUEST_SIZE) // Again Http doesnt provide this, depends on server logic
+	buffer := make([]byte, cfg.BufferLimit)  // No global default, set accordingly
+	req := make([]byte, 0, cfg.RequestLimit) // Again Http doesnt provide this, depends on server logic
 
 	var headerIdx = -1
+	conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
 	for {
 		streamLength, err := conn.Read(buffer)
 		if err != nil {
@@ -47,7 +25,7 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		if len(req)+streamLength > MAX_REQUEST_SIZE {
+		if len(req)+streamLength > cfg.HeaderLimit {
 			log.Printf("Maximum Request size limit breached")
 			return
 		}
@@ -78,7 +56,7 @@ func handleConnection(conn net.Conn) {
 		}
 		log.Printf("Body Chunk: %d bytes", bodyStreamLength)
 
-		if len(req)+bodyStreamLength > MAX_REQUEST_SIZE {
+		if len(req)+bodyStreamLength > cfg.RequestLimit {
 			log.Printf("Maximum Request size limit breached")
 			return
 		}
@@ -93,20 +71,6 @@ func handleConnection(conn net.Conn) {
 	log.Printf("Body :%v", len(body))
 	log.Printf("Request Length: %d\n", len(req))
 
-	resp := "HTTP/1.1 200 OK\r\n" +
-		"Content-Length: 5\r\n" +
-		"Content-Type: text/plain\r\n" +
-		"\r\n" +
-		"Hello"
-	respByte := []byte(resp)
-
-	conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
-
-	time.Sleep(WRITE_TIMEOUT * 2)
-	_, err := conn.Write(respByte)
-	if err != nil {
-		log.Printf("Write Error :%v", err)
-	}
 }
 
 func parseContentLength(headers []byte) (int, error) {
