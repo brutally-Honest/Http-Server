@@ -39,7 +39,6 @@ func handleConnection(conn net.Conn) {
 	buffer := make([]byte, READ_BUFFER)      // No global default, set accordingly
 	req := make([]byte, 0, MAX_REQUEST_SIZE) // Again Http doesnt provide this, depends on server logic
 
-	i := 0
 	var headerIdx = -1
 	for {
 		streamLength, err := conn.Read(buffer)
@@ -48,20 +47,17 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		log.Printf("Data : \n%v,StreamLength : %d\n", string(buffer[:streamLength]), streamLength)
 		if len(req)+streamLength > MAX_REQUEST_SIZE {
 			log.Printf("Maximum Request size limit breached")
 			return
 		}
 
 		req = append(req, buffer[:streamLength]...)
-		i++
 		if bytes.Contains(req, []byte("\r\n\r\n")) {
 			headerIdx = bytes.Index(req, []byte("\r\n\r\n"))
 			break
 		}
 	}
-	log.Printf("%d Chunks", i)
 
 	headers := req[:headerIdx]
 	contentLength, p_err := parseContentLength(headers)
@@ -70,7 +66,32 @@ func handleConnection(conn net.Conn) {
 	}
 	log.Println("Content Length:", contentLength)
 
-	log.Printf("Full Request Length: %d\n", len(req))
+	body := req[headerIdx+4:]
+	remainingBody := contentLength - len(body)
+	log.Printf("Remaining Body :%d", remainingBody)
+
+	for remainingBody > 0 {
+		bodyStreamLength, err := conn.Read(buffer)
+		if err != nil {
+			log.Printf("Body Read Error :%v", err)
+			return
+		}
+		log.Printf("Body Chunk: %d bytes", bodyStreamLength)
+
+		if len(req)+bodyStreamLength > MAX_REQUEST_SIZE {
+			log.Printf("Maximum Request size limit breached")
+			return
+		}
+
+		req = append(req, buffer[:bodyStreamLength]...)
+		body = append(body, buffer[:bodyStreamLength]...)
+
+		remainingBody -= bodyStreamLength
+	}
+
+	log.Printf("Headers :%v", len(headers)+4)
+	log.Printf("Body :%v", len(body))
+	log.Printf("Request Length: %d\n", len(req))
 
 	resp := "HTTP/1.1 200 OK\r\n" +
 		"Content-Length: 5\r\n" +
@@ -81,6 +102,7 @@ func handleConnection(conn net.Conn) {
 
 	conn.SetWriteDeadline(time.Now().Add(WRITE_TIMEOUT))
 
+	time.Sleep(WRITE_TIMEOUT * 2)
 	_, err := conn.Write(respByte)
 	if err != nil {
 		log.Printf("Write Error :%v", err)
