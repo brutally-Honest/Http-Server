@@ -23,6 +23,7 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*models.Request, error) {
 
 	conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
 	buffer := make([]byte, cfg.BufferLimit)
+	var contentLength int
 
 	headersRaw, leftover, err := readHeaders(conn, cfg, buffer)
 	if err != nil {
@@ -41,13 +42,36 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*models.Request, error) {
 		return nil, err
 	}
 
-	contentLength, err := parseContentLength(headersRaw)
+	// RFC Requirements
+	if version == "HTTP/1.1" {
+		if _, ok := headerMap["Host"]; !ok {
+			return nil, errors.New("HTTP/1.1 requires Host header")
+		}
+	}
+
+	_, hasCL := headerMap["content-length"]
+	_, hasTE := headerMap["transfer-encoding"]
+
+	if hasCL && hasTE {
+		return nil, errors.New("both Content-Length and Transfer-Encoding present")
+	}
+
+	//TODO: implement Chunked encoding
+	if hasTE {
+		return nil, errors.New("Transfer-Encoding: chunked not implemented yet")
+	}
+
+	contentLength, err = parseContentLength(headersRaw)
 	if err != nil {
 		log.Printf("parseContentLength error: %v", err)
 		return nil, err
 	}
 
 	log.Println("Content Length:", contentLength)
+
+	if contentLength > cfg.BodyLimit {
+		return nil, ErrBodyLimitExceeded
+	}
 
 	body := make([]byte, len(leftover))
 	copy(body, leftover)
@@ -97,13 +121,13 @@ func readHeaders(conn net.Conn, cfg *config.Config, buffer []byte) ([]byte, []by
 	}
 }
 
-func parseRequestLine(buf []byte) (method, path, version string, err error) {
-	idx := bytes.Index(buf, []byte("\r\n"))
+func parseRequestLine(headers []byte) (method, path, version string, err error) {
+	idx := bytes.Index(headers, []byte("\r\n"))
 	if idx == -1 {
 		return "", "", "", errors.New("invalid request line: missing CRLF")
 	}
 
-	requestLine := bytes.TrimSpace(buf[:idx])
+	requestLine := bytes.TrimSpace(headers[:idx])
 
 	// Split by any amount of whitespace
 	parts := bytes.Fields(requestLine)
@@ -115,8 +139,16 @@ func parseRequestLine(buf []byte) (method, path, version string, err error) {
 	path = string(parts[1])
 	version = string(parts[2])
 
-	if !strings.HasPrefix(version, "HTTP/1.") {
-		return "", "", "", fmt.Errorf("unsupported HTTP version: %s", version)
+	if validMethod, err := validateMethod(method); !validMethod {
+		return "", "", "", err
+	}
+
+	if validPath, err := validatePath(path); !validPath {
+		return "", "", "", err
+	}
+
+	if validVersion, err := validateVersion(version); !validVersion {
+		return "", "", "", err
 	}
 
 	log.Printf("Method:%s | Path :%s | Version:%s", method, path, version)
@@ -146,7 +178,11 @@ func parseHeaders(headers []byte) (map[string]string, error) {
 			continue // Skip malformed headers
 		}
 
-		key := string(bytes.TrimSpace(line[:colonIdx]))
+		key := strings.ToLower(string(bytes.TrimSpace(line[:colonIdx])))
+		if _, exists := headerMap[key]; exists {
+			return nil, errors.New("duplicate header: " + key)
+		}
+
 		value := string(bytes.TrimSpace(line[colonIdx+1:]))
 		headerMap[key] = value
 	}
