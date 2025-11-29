@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/brutally-Honest/http-server/internal/config"
+	"github.com/brutally-Honest/http-server/internal/models"
 )
 
-func ParseRequest(conn net.Conn, cfg *config.Config) {
+func ParseRequest(conn net.Conn, cfg *config.Config) (*models.Request, error) {
 
-	buffer := make([]byte, cfg.BufferLimit)  // No global default, set accordingly
-	req := make([]byte, 0, cfg.RequestLimit) // Again Http doesnt provide this, depends on server logic
+	buffer := make([]byte, cfg.BufferLimit)
+	req := make([]byte, 0, cfg.RequestLimit)
 
 	var headerIdx = -1
 	conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
@@ -22,12 +23,12 @@ func ParseRequest(conn net.Conn, cfg *config.Config) {
 		streamLength, err := conn.Read(buffer)
 		if err != nil {
 			log.Printf("Read Error :%v", err)
-			return
+			return nil, err
 		}
 
 		if len(req)+streamLength > cfg.HeaderLimit {
 			log.Printf("Maximum Request size limit breached")
-			return
+			return nil, err
 		}
 
 		req = append(req, buffer[:streamLength]...)
@@ -52,13 +53,13 @@ func ParseRequest(conn net.Conn, cfg *config.Config) {
 		bodyStreamLength, err := conn.Read(buffer)
 		if err != nil {
 			log.Printf("Body Read Error :%v", err)
-			return
+			return nil, err
 		}
 		log.Printf("Body Chunk: %d bytes", bodyStreamLength)
 
 		if len(req)+bodyStreamLength > cfg.RequestLimit {
 			log.Printf("Maximum Request size limit breached")
-			return
+			return nil, err
 		}
 
 		req = append(req, buffer[:bodyStreamLength]...)
@@ -71,6 +72,13 @@ func ParseRequest(conn net.Conn, cfg *config.Config) {
 	log.Printf("Body :%v", len(body))
 	log.Printf("Request Length: %d\n", len(req))
 
+	return &models.Request{
+		Method:  "temp",
+		Version: "temp",
+		Path:    "temp",
+		Headers: map[string]string{},
+		Body:    []byte{},
+	}, nil
 }
 
 func parseContentLength(headers []byte) (int, error) {
