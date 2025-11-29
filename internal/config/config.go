@@ -4,18 +4,18 @@ import "time"
 
 type Config struct {
 	BufferLimit  int
-	RequestLimit int
+	BodyLimit    int
 	HeaderLimit  int
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 }
 
 func Load(
-	BufferLimit, RequestLimit, HeaderLimit int,
+	BufferLimit, BodyLimit, HeaderLimit int,
 	ReadTimeout, WriteTimeout time.Duration) *Config {
 	return &Config{
 		BufferLimit:  BufferLimit,
-		RequestLimit: RequestLimit,
+		BodyLimit:    BodyLimit,
 		HeaderLimit:  HeaderLimit,
 		ReadTimeout:  ReadTimeout,
 		WriteTimeout: WriteTimeout,

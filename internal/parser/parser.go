@@ -2,83 +2,156 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/brutally-Honest/http-server/internal/config"
 	"github.com/brutally-Honest/http-server/internal/models"
 )
 
+var (
+	ErrHeaderLimitExceeded = errors.New("header size limit exceeded")
+	ErrBodyLimitExceeded   = errors.New("body size limit exceeded")
+)
+
 func ParseRequest(conn net.Conn, cfg *config.Config) (*models.Request, error) {
 
-	buffer := make([]byte, cfg.BufferLimit)
-	req := make([]byte, 0, cfg.RequestLimit)
-
-	var headerIdx = -1
 	conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
+	buffer := make([]byte, cfg.BufferLimit)
+
+	headersRaw, leftover, err := readHeaders(conn, cfg, buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	method, path, version, err := parseRequestLine(headersRaw)
+	if err != nil {
+		log.Printf("Invalid request line: %v", err)
+		return nil, err
+	}
+
+	headerMap, err := parseHeaders(headersRaw)
+	if err != nil {
+		log.Printf("Invalid headers: %v", err)
+		return nil, err
+	}
+
+	contentLength, err := parseContentLength(headersRaw)
+	if err != nil {
+		log.Printf("parseContentLength error: %v", err)
+		return nil, err
+	}
+
+	log.Println("Content Length:", contentLength)
+
+	body := make([]byte, len(leftover))
+	copy(body, leftover)
+
+	if need := contentLength - len(body); need > 0 {
+		more, err := readBody(conn, cfg, need, buffer)
+		if err != nil {
+			return nil, err
+		}
+		body = append(body, more...)
+	}
+
+	log.Printf("Headers: %d bytes", len(headersRaw)+4)
+	log.Printf("Body: %d bytes", len(body))
+	log.Printf("Total Request: %d bytes", len(headersRaw)+4+len(body))
+
+	return &models.Request{
+		Method:  method,
+		Version: version,
+		Path:    path,
+		Headers: headerMap,
+		Body:    body,
+	}, nil
+}
+
+// read until \r\n\r\n is found
+func readHeaders(conn net.Conn, cfg *config.Config, buffer []byte) ([]byte, []byte, error) {
+	headers := make([]byte, 0, cfg.HeaderLimit)
 	for {
 		streamLength, err := conn.Read(buffer)
 		if err != nil {
-			log.Printf("Read Error :%v", err)
-			return nil, err
+			log.Printf("read error: %v", err)
+			return nil, nil, err
 		}
 
-		if len(req)+streamLength > cfg.HeaderLimit {
-			log.Printf("Maximum Request size limit breached")
-			return nil, err
+		if len(headers)+streamLength > cfg.HeaderLimit {
+			log.Printf("header limit exceeded")
+			return nil, nil, ErrHeaderLimitExceeded
 		}
 
-		req = append(req, buffer[:streamLength]...)
-		if bytes.Contains(req, []byte("\r\n\r\n")) {
-			headerIdx = bytes.Index(req, []byte("\r\n\r\n"))
-			break
+		headers = append(headers, buffer[:streamLength]...)
+
+		if idx := bytes.Index(headers, []byte("\r\n\r\n")); idx != -1 {
+			headerEnd := idx + 4
+			return headers[:idx], headers[headerEnd:], nil
 		}
 	}
+}
 
-	headers := req[:headerIdx]
-	contentLength, p_err := parseContentLength(headers)
-	if p_err != nil {
-		log.Print(p_err)
-	}
-	log.Println("Content Length:", contentLength)
-
-	body := req[headerIdx+4:]
-	remainingBody := contentLength - len(body)
-	log.Printf("Remaining Body :%d", remainingBody)
-
-	for remainingBody > 0 {
-		bodyStreamLength, err := conn.Read(buffer)
-		if err != nil {
-			log.Printf("Body Read Error :%v", err)
-			return nil, err
-		}
-		log.Printf("Body Chunk: %d bytes", bodyStreamLength)
-
-		if len(req)+bodyStreamLength > cfg.RequestLimit {
-			log.Printf("Maximum Request size limit breached")
-			return nil, err
-		}
-
-		req = append(req, buffer[:bodyStreamLength]...)
-		body = append(body, buffer[:bodyStreamLength]...)
-
-		remainingBody -= bodyStreamLength
+func parseRequestLine(buf []byte) (method, path, version string, err error) {
+	idx := bytes.Index(buf, []byte("\r\n"))
+	if idx == -1 {
+		return "", "", "", errors.New("invalid request line: missing CRLF")
 	}
 
-	log.Printf("Headers :%v", len(headers)+4)
-	log.Printf("Body :%v", len(body))
-	log.Printf("Request Length: %d\n", len(req))
+	requestLine := bytes.TrimSpace(buf[:idx])
 
-	return &models.Request{
-		Method:  "temp",
-		Version: "temp",
-		Path:    "temp",
-		Headers: map[string]string{},
-		Body:    []byte{},
-	}, nil
+	// Split by any amount of whitespace
+	parts := bytes.Fields(requestLine)
+	if len(parts) != 3 {
+		return "", "", "", errors.New("invalid request line format")
+	}
+
+	method = string(parts[0])
+	path = string(parts[1])
+	version = string(parts[2])
+
+	if !strings.HasPrefix(version, "HTTP/1.") {
+		return "", "", "", fmt.Errorf("unsupported HTTP version: %s", version)
+	}
+
+	log.Printf("Method:%s | Path :%s | Version:%s", method, path, version)
+	return method, path, version, nil
+}
+
+func parseHeaders(headers []byte) (map[string]string, error) {
+	headerMap := make(map[string]string)
+
+	// Skip request line
+	idx := bytes.Index(headers, []byte("\r\n"))
+	if idx == -1 {
+		return headerMap, nil
+	}
+
+	headerLines := headers[idx+2:] // Skip past first \r\n
+	lines := bytes.Split(headerLines, []byte("\r\n"))
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+
+		// Split on first colon
+		colonIdx := bytes.IndexByte(line, ':')
+		if colonIdx == -1 {
+			continue // Skip malformed headers
+		}
+
+		key := string(bytes.TrimSpace(line[:colonIdx]))
+		value := string(bytes.TrimSpace(line[colonIdx+1:]))
+		headerMap[key] = value
+	}
+
+	return headerMap, nil
 }
 
 func parseContentLength(headers []byte) (int, error) {
@@ -116,5 +189,42 @@ func parseContentLength(headers []byte) (int, error) {
 		found = true
 	}
 
+	if !found {
+		return 0, nil
+	}
 	return length, nil
+}
+
+// read based on Content-Length
+func readBody(conn net.Conn, cfg *config.Config, contentLength int, buffer []byte) ([]byte, error) {
+	if contentLength == 0 {
+		return nil, nil
+	}
+
+	if contentLength > cfg.BodyLimit {
+		return nil, ErrBodyLimitExceeded
+	}
+
+	body := make([]byte, 0, contentLength)
+
+	for len(body) < contentLength {
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Printf("body Read Error :%v", err)
+			return nil, err
+		}
+
+		if len(body)+n > cfg.BodyLimit {
+			return nil, ErrBodyLimitExceeded
+		}
+
+		remaining := contentLength - len(body)
+		if n > remaining {
+			n = remaining
+		}
+
+		body = append(body, buffer[:n]...)
+	}
+
+	return body, nil
 }
