@@ -36,3 +36,5 @@ func (s *Server) ListenAndServe() error {
 		go s.handleConnection(conn)
 	}
 }
+
+// TODO: implement shutdown

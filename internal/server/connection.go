@@ -11,7 +11,11 @@ import (
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	// Parse request
 	parser.ParseRequest(conn, s.config)
+	// Handle the request based on apt route
+
+	//Send response
 	resp := "HTTP/1.1 200 OK\r\n" +
 		"Content-Length: 5\r\n" +
 		"Content-Type: text/plain\r\n" +
