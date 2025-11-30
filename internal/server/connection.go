@@ -5,13 +5,13 @@ import (
 	"net"
 	"time"
 
-	"github.com/brutally-Honest/http-server/internal/parser"
+	"github.com/brutally-Honest/http-server/internal/request"
 )
 
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	_, req_err := parser.ParseRequest(conn, s.config)
+	_, req_err := request.ParseRequest(conn, s.config)
 	// default response for now
 	if req_err != nil {
 		resp := "HTTP/1.1 400 Bad Request\r\n" +
