@@ -11,7 +11,19 @@ import (
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	parser.ParseRequest(conn, s.config)
+	_, req_err := parser.ParseRequest(conn, s.config)
+	// default response for now
+	if req_err != nil {
+		resp := "HTTP/1.1 400 Bad Request\r\n" +
+			"Content-Length: 11\r\n" +
+			"Connection: close\r\n" +
+			"\r\n" +
+			"Bad Request"
+
+		conn.Write([]byte(resp))
+		conn.Close()
+		return
+	}
 	// TODO: Handle the parse errors and write to response
 	// TODO: Handle the request based on apt route
 
