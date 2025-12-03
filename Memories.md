@@ -10,3 +10,5 @@
         - Graceful shutdown / reload
         - Memory or FD pressure
 2. HTTP 1.1 supports pipelining, sequencing also, but the default behaviour of most modern clients is to close the connection after a single req–res cycle
+3. To test if requests reuse a connection using curl, use `--next` for multiple URLs.  
+This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycles on the same TCP connection).
