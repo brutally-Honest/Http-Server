@@ -9,3 +9,4 @@
         - Idle-timeout
         - Graceful shutdown / reload
         - Memory or FD pressure
+2. HTTP 1.1 supports pipelining, sequencing also, but the default behaviour of most modern clients is to close the connection after a single req–res cycle

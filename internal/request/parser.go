@@ -57,8 +57,6 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
 		return nil, err
 	}
 
-	log.Println("Content Length:", contentLength)
-
 	if contentLength > cfg.BodyLimit {
 		return nil, ErrBodyLimitExceeded
 	}
@@ -75,6 +73,7 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
 	}
 
 	log.Printf("Headers: %d bytes", len(headersRaw)+4)
+	log.Printf("Content Length: %d", contentLength)
 	log.Printf("Body: %d bytes", len(body))
 	log.Printf("Total Request: %d bytes", len(headersRaw)+4+len(body))
 
