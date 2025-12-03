@@ -34,7 +34,7 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
 
 	// RFC Requirements
 	if version == "HTTP/1.1" {
-		if _, ok := headerMap["Host"]; !ok {
+		if _, ok := headerMap["host"]; !ok {
 			return nil, errors.New("HTTP/1.1 requires Host header")
 		}
 	}

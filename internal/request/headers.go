@@ -37,6 +37,7 @@ func parseHeaders(headers []byte) (map[string]string, error) {
 		}
 
 		value := string(bytes.TrimSpace(line[colonIdx+1:]))
+		fmt.Printf("%s:%s\n", key, value)
 		headerMap[key] = value
 	}
 
