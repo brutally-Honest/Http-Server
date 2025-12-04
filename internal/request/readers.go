@@ -2,19 +2,34 @@ package request
 
 import (
 	"bytes"
+	"errors"
+	"io"
 	"log"
 	"net"
 
 	"github.com/brutally-Honest/http-server/internal/config"
 )
 
+func safeRead(conn net.Conn, buffer []byte) (int, error) {
+	n, err := conn.Read(buffer)
+	if err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+			log.Printf("connection closed by client")
+			return n, ErrConnectionClosed
+		}
+
+		log.Printf("read error: %v", err)
+		return n, err
+	}
+	return n, nil
+}
+
 // read until \r\n\r\n is found
 func readHeaders(conn net.Conn, cfg *config.Config, buffer []byte) ([]byte, []byte, error) {
 	headers := make([]byte, 0, cfg.HeaderLimit)
 	for {
-		streamLength, err := conn.Read(buffer)
+		streamLength, err := safeRead(conn, buffer)
 		if err != nil {
-			log.Printf("read error: %v", err)
 			return nil, nil, err
 		}
 
@@ -45,9 +60,8 @@ func readBody(conn net.Conn, cfg *config.Config, contentLength int, buffer []byt
 	body := make([]byte, 0, contentLength)
 
 	for len(body) < contentLength {
-		n, err := conn.Read(buffer)
+		n, err := safeRead(conn, buffer)
 		if err != nil {
-			log.Printf("body Read Error :%v", err)
 			return nil, err
 		}
 
