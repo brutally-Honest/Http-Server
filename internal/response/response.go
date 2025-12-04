@@ -46,25 +46,17 @@ func isConnectionError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
-	return contains(errStr, "broken pipe") ||
-		contains(errStr, "connection reset")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr || len(s) > len(substr) &&
-			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-				indexOf(s, substr) >= 0))
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
+	if errors.Is(err, io.EOF) {
+		return true
 	}
-	return -1
+	// net.Error but not timeout → client closed/reset
+	if ne, ok := err.(net.Error); ok && !ne.Timeout() {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "use of closed network connection")
 }
 
 func safeWriteString(conn net.Conn, s string) error {
