@@ -11,14 +11,20 @@ import (
 )
 
 func (s *Server) handleConnection(conn net.Conn) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("panic in handleConnection: %v", r)
+			conn.Close()
+		}
+	}()
 	i := 0
 	for {
 		i++
 		log.Println("Req-Res Cycle number:", i)
 
-		req, req_err := request.ParseRequest(conn, s.config)
-		if req_err != nil {
-			log.Println(req_err.Error())
+		req, reqErr := request.ParseRequest(conn, s.config)
+		if reqErr != nil {
+			log.Println(reqErr.Error())
 			res := response.NewResponse(400)
 			res.Write([]byte("Bad Request"))
 			res.Flush(conn, nil, true)
