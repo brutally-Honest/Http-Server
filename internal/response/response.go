@@ -3,6 +3,8 @@ package response
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -26,6 +28,48 @@ func NewResponse(code int) *Response {
 		StatusCode: code,
 		Headers:    map[string]string{},
 	}
+}
+
+func safeWrite(conn net.Conn, buffer []byte) (int, error) {
+	n, err := conn.Write(buffer)
+	if err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || isConnectionError(err) {
+			return n, ErrConnectionClosed
+		}
+		log.Printf("write error: %v", err)
+		return n, err
+	}
+	return n, nil
+}
+
+func isConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return contains(errStr, "broken pipe") ||
+		contains(errStr, "connection reset")
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) &&
+		(s == substr || len(s) > len(substr) &&
+			(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+				indexOf(s, substr) >= 0))
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func safeWriteString(conn net.Conn, s string) error {
+	_, err := safeWrite(conn, []byte(s))
+	return err
 }
 
 func (r *Response) SetHeader(k, v string) error {
@@ -77,12 +121,13 @@ func (r *Response) writeHeaders(conn net.Conn) error {
 	}
 
 	for k, v := range r.Headers {
-		if _, err := fmt.Fprintf(conn, "%s: %s\r\n", k, v); err != nil {
+		header := fmt.Sprintf("%s: %s\r\n", k, v)
+		if err := safeWriteString(conn, header); err != nil {
 			return err
 		}
 	}
 
-	if _, err := conn.Write([]byte("\r\n")); err != nil {
+	if err := safeWriteString(conn, "\r\n"); err != nil {
 		return err
 	}
 
@@ -122,13 +167,15 @@ func (r *Response) WriteChunk(conn net.Conn, data []byte) error {
 	// chunk size in hex
 	size := fmt.Sprintf("%x\r\n", len(data))
 
-	if _, err := conn.Write([]byte(size)); err != nil {
+	if err := safeWriteString(conn, size); err != nil {
 		return err
 	}
-	if _, err := conn.Write(data); err != nil {
+
+	if _, err := safeWrite(conn, data); err != nil {
 		return err
 	}
-	if _, err := conn.Write([]byte("\r\n")); err != nil {
+
+	if err := safeWriteString(conn, "\r\n"); err != nil {
 		return err
 	}
 
@@ -140,8 +187,7 @@ func (r *Response) EndChunked(conn net.Conn) error {
 		return errors.New("not chunked response")
 	}
 
-	_, err := conn.Write([]byte("0\r\n\r\n"))
-	return err
+	return safeWriteString(conn, "0\r\n\r\n")
 }
 
 func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose bool) error {
@@ -164,7 +210,7 @@ func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose b
 		return errors.New("actual body size does not match Content-Length")
 	}
 
-	if _, err := conn.Write(r.Body); err != nil {
+	if _, err := safeWrite(conn, r.Body); err != nil {
 		return err
 	}
 	return nil
