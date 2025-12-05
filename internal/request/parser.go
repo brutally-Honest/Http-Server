@@ -51,7 +51,7 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
 		return nil, errors.New("Transfer-Encoding: chunked not implemented yet")
 	}
 
-	contentLength, err = parseContentLength(headersRaw)
+	contentLength, err = getContentLength(headerMap)
 	if err != nil {
 		log.Printf("parseContentLength error: %v", err)
 		return nil, err

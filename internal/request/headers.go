@@ -44,43 +44,14 @@ func parseHeaders(headers []byte) (map[string]string, error) {
 	return headerMap, nil
 }
 
-func parseContentLength(headers []byte) (int, error) {
-	lines := bytes.Split(headers, []byte("\r\n"))
-	found := false
-	var length int
-
-	for _, line := range lines {
-		if len(line) < 15 {
-			continue
-		}
-
-		// Use EqualFold - case-insensitive without allocation
-		if !bytes.EqualFold(line[:15], []byte("content-length:")) {
-			continue
-		}
-
-		// Multiple Content-Length headers = error
-		if found {
-			return 0, fmt.Errorf("multiple Content-Length headers")
-		}
-
-		value := bytes.TrimSpace(line[15:])
-
-		n, err := strconv.Atoi(string(value))
-		if err != nil {
-			return 0, fmt.Errorf("invalid Content-Length value: %w", err)
-		}
-
-		if n < 0 {
-			return 0, fmt.Errorf("negative Content-Length: %d", n)
-		}
-
-		length = n
-		found = true
-	}
-
-	if !found {
+func getContentLength(headers map[string]string) (int, error) {
+	val, ok := headers["content-length"]
+	if !ok {
 		return 0, nil
 	}
-	return length, nil
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("invalid Content-Length: %s", val)
+	}
+	return n, nil
 }
