@@ -35,6 +35,35 @@ func (s *Server) handleConnection(conn net.Conn) {
 		_, cancelReq := context.WithCancel(ctx)
 		// TODO: Handle the request based on apt route with reqCtx passed
 
+		// temp route for chunked transfer encoding
+		if req.Path == "/stream" && req.Method == "GET" {
+			res := response.NewResponse(200)
+			res.SetHeader("Content-Type", "text/plain")
+			res.SetHeader("Transfer-Encoding", "chunked")
+
+			chunks := []string{"Testing\n", "Transfer\n", "Encoding\n", "With\n", "HTTP\n", "1.1\n"}
+			for _, chunk := range chunks {
+				// Reset write deadline for each chunk
+				conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
+
+				if err := res.WriteChunk(conn, []byte(chunk)); err != nil {
+					log.Printf("WriteChunk failed: %v", err)
+					conn.Close()
+					return
+				}
+
+				time.Sleep(10 * time.Second) // simulate slow generation
+			}
+
+			conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
+			if err := res.EndChunked(conn); err != nil {
+				log.Printf("EndChunked failed: %v", err)
+				conn.Close()
+				return
+			}
+
+			continue
+		}
 		// TODO: Wrap the response with config for write timeout
 		res := response.NewResponse(200) // default for now
 		conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
