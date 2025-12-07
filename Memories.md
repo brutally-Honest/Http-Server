@@ -12,3 +12,4 @@
 2. HTTP 1.1 supports pipelining, sequencing also, but the default behaviour of most modern clients is to close the connection after a single req–res cycle
 3. To test if requests reuse a connection using curl, use `--next` for multiple URLs.  
 This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycles on the same TCP connection).
+4. Transfer-encoding chunked in HTTP/1.1 is ~28 years old (HTTP/1.1 -> 1997, today 2025), almost three decades, still alive and kicking
