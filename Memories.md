@@ -13,3 +13,5 @@
 3. To test if requests reuse a connection using curl, use `--next` for multiple URLs.  
 This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycles on the same TCP connection).
 4. Transfer-encoding chunked in HTTP/1.1 is ~28 years old (HTTP/1.1 -> 1997, today 2025), almost three decades, still alive and kicking
+5. Lapse in understanding: Streaming ≠ SSE!
+Its a protocol on top of HTTP which deals with UTF-8 only and requires a very specific event-stream format (headers + body)
