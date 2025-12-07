@@ -14,7 +14,7 @@ func safeRead(conn net.Conn, buffer []byte) (int, error) {
 	n, err := conn.Read(buffer)
 	if err != nil {
 		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-			log.Printf("connection closed by client")
+			log.Printf("safe read: connection closed by client")
 			return n, ErrConnectionClosed
 		}
 

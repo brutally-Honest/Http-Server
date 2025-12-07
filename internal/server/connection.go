@@ -24,7 +24,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	for {
 		req, reqErr := request.ParseRequest(conn, s.config)
 		if reqErr != nil {
-			log.Println(reqErr.Error())
+			log.Println("connection: ", reqErr.Error())
 			cancelConn()
 			res := response.NewResponse(400)
 			res.Write([]byte("Bad Request"))
