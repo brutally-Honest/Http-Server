@@ -79,7 +79,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// TODO: Wrap the response with config for write timeout
 		res := response.NewResponseWithContext(200, ctx, reqCtx) // default for now
 		conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
-		res.Flush(conn, req, false)
+		if err := res.Flush(conn, req, false); err != nil {
+			cancelReq()
+			conn.Close()
+			return
+		}
 		cancelReq()
 		if strings.ToLower(req.Headers["Connection"]) == "close" {
 			cancelConn()
