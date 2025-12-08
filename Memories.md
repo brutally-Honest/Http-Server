@@ -16,3 +16,4 @@ This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycl
 5. Lapse in understanding: Streaming ≠ SSE!
 Its a protocol on top of HTTP which deals with UTF-8 only and requires a very specific event-stream format (headers + body)
 6. Request can only be cancelled by server with connection still alive, its only connection close from the client
+7. Always cancel contexts that you create to prevent memory leaks and free up resources
