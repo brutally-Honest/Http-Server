@@ -1,12 +1,10 @@
 package response
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"io"
-	"log"
 	"net"
-	"strconv"
 	"strings"
 
 	"github.com/brutally-Honest/http-server/internal/request"
@@ -21,26 +19,18 @@ type Response struct {
 
 	hasContentLength bool
 	contentLength    int
+
+	connCtx context.Context
+	reqCtx  context.Context
 }
 
-func NewResponse(code int) *Response {
+func NewResponseWithContext(code int, connCtx, reqCtx context.Context) *Response {
 	return &Response{
 		StatusCode: code,
 		Headers:    map[string]string{},
+		connCtx:    connCtx,
+		reqCtx:     reqCtx,
 	}
-}
-
-func safeWrite(conn net.Conn, buffer []byte) (int, error) {
-	n, err := conn.Write(buffer)
-	if err != nil {
-		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) || isConnectionError(err) {
-			log.Printf("write error : connection closed")
-			return n, ErrConnectionClosed
-		}
-		log.Printf("write error: %v", err)
-		return n, err
-	}
-	return n, nil
 }
 
 func isConnectionError(err error) bool {
@@ -58,155 +48,6 @@ func isConnectionError(err error) bool {
 	return strings.Contains(msg, "broken pipe") ||
 		strings.Contains(msg, "connection reset") ||
 		strings.Contains(msg, "use of closed network connection")
-}
-
-func safeWriteString(conn net.Conn, s string) error {
-	_, err := safeWrite(conn, []byte(s))
-	return err
-}
-
-func (r *Response) SetHeader(k, v string) error {
-	if r.headerWritten {
-		return errors.New("headers already written")
-	}
-
-	if strings.ToLower(k) == "content-length" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			return errors.New("invalid content-length")
-		}
-		r.hasContentLength = true
-		r.contentLength = n
-	}
-
-	if strings.ToLower(k) == "transfer-encoding" && strings.ToLower(v) == "chunked" {
-		r.chunked = true
-	}
-
-	r.Headers[k] = v
-	return nil
-}
-
-func (r *Response) WriteHeader(code int) error {
-	if r.headerWritten {
-		return errors.New("WriteHeader called twice")
-	}
-	r.StatusCode = code
-	r.headerWritten = true
-	return nil
-}
-
-func (r *Response) writeHeaders(conn net.Conn) error {
-	statusText := getStatusText(r.StatusCode)
-	if statusText == "Unknown" {
-		return errors.New("invalid status code")
-	}
-	if _, err := fmt.Fprintf(conn, "HTTP/1.1 %d %s\r\n", r.StatusCode, statusText); err != nil {
-		return err
-	}
-
-	if !r.chunked && !r.hasContentLength {
-		r.Headers["Content-Length"] = strconv.Itoa(len(r.Body))
-	}
-
-	if r.chunked {
-		r.Headers["Transfer-Encoding"] = "chunked"
-	}
-
-	for k, v := range r.Headers {
-		header := fmt.Sprintf("%s: %s\r\n", k, v)
-		if err := safeWriteString(conn, header); err != nil {
-			return err
-		}
-	}
-
-	if err := safeWriteString(conn, "\r\n"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Response) Write(b []byte) error {
-	if r.chunked {
-		return errors.New("cannot use Write() when chunked encoding is enabled; use WriteChunk()")
-	}
-
-	if r.hasContentLength && len(r.Body)+len(b) > r.contentLength {
-		return errors.New("body exceeds Content-Length")
-	}
-
-	if !r.headerWritten {
-		r.headerWritten = true
-	}
-
-	r.Body = append(r.Body, b...)
-	return nil
-}
-
-func (r *Response) WriteChunk(conn net.Conn, data []byte) error {
-	if !r.chunked {
-		return errors.New("chunked encoding is not enabled")
-	}
-
-	if !r.headerWritten {
-		// write headers before first chunk
-		if err := r.writeHeaders(conn); err != nil {
-			return err
-		}
-		r.headerWritten = true
-	}
-
-	// chunk size in hex
-	size := fmt.Sprintf("%x\r\n", len(data))
-
-	if err := safeWriteString(conn, size); err != nil {
-		return err
-	}
-
-	if _, err := safeWrite(conn, data); err != nil {
-		return err
-	}
-
-	if err := safeWriteString(conn, "\r\n"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (r *Response) EndChunked(conn net.Conn) error {
-	if !r.chunked {
-		return errors.New("not chunked response")
-	}
-
-	return safeWriteString(conn, "0\r\n\r\n")
-}
-
-func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose bool) error {
-	if r.chunked {
-		return errors.New("use WriteChunk + EndChunked for streaming responses")
-	}
-
-	if !r.headerWritten {
-		r.headerWritten = true
-	}
-
-	connHeader := determineConnectionHeader(req, serverWantsClose)
-	r.Headers["Connection"] = connHeader
-
-	if err := r.writeHeaders(conn); err != nil {
-		return err
-	}
-
-	if r.hasContentLength && len(r.Body) != r.contentLength {
-		return errors.New("actual body size does not match Content-Length")
-	}
-
-	if _, err := safeWrite(conn, r.Body); err != nil {
-		return err
-	}
-	return nil
 }
 
 func determineConnectionHeader(req *request.Request, serverWantsClose bool) string {
@@ -247,4 +88,22 @@ func getStatusText(code int) string {
 		return text
 	}
 	return "Unknown"
+}
+
+func (r *Response) checkCancel() error {
+	if r.reqCtx != nil {
+		select {
+		case <-r.reqCtx.Done():
+			return r.reqCtx.Err()
+		default:
+		}
+	}
+
+	select {
+	case <-r.connCtx.Done():
+		return context.Canceled
+	default:
+	}
+
+	return nil
 }
