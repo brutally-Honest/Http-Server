@@ -42,20 +42,34 @@ func (s *Server) handleConnection(conn net.Conn) {
 			res.SetHeader("Transfer-Encoding", "chunked")
 
 			chunks := []string{"Testing\n", "Transfer\n", "Encoding\n", "With\n", "HTTP\n", "1.1\n"}
+			var streamErr error
 			for _, chunk := range chunks {
 				// Reset write deadline for each chunk
 				conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
-				time.Sleep(2 * time.Second)
 				if err := res.WriteChunk(conn, []byte(chunk)); err != nil {
 					log.Printf("WriteChunk failed: %v", err)
-					conn.Close()
-					return
+					streamErr = err
+					break
 				}
 			}
 
-			conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
-			if err := res.EndChunked(conn); err != nil {
-				log.Printf("EndChunked failed: %v", err)
+			if streamErr == nil {
+				conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
+				if err := res.EndChunked(conn); err != nil {
+					log.Printf("EndChunked failed: %v", err)
+					streamErr = err
+				}
+			}
+
+			cancelReq()
+
+			if streamErr != nil {
+				conn.Close()
+				return
+			}
+
+			if strings.ToLower(req.Headers["Connection"]) == "close" {
+				cancelConn()
 				conn.Close()
 				return
 			}
