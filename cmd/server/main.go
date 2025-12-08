@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/brutally-Honest/http-server/internal/config"
@@ -16,5 +17,5 @@ func main() {
 		time.Second*10,
 	)
 	s := server.NewServer(":1783", cfg)
-	s.ListenAndServe()
+	log.Fatal(s.ListenAndServe())
 }
