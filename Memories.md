@@ -15,3 +15,4 @@ This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycl
 4. Transfer-encoding chunked in HTTP/1.1 is ~28 years old (HTTP/1.1 -> 1997, today 2025), almost three decades, still alive and kicking
 5. Lapse in understanding: Streaming ≠ SSE!
 Its a protocol on top of HTTP which deals with UTF-8 only and requires a very specific event-stream format (headers + body)
+6. Request can only be cancelled by server with connection still alive, its only connection close from the client
