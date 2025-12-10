@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/brutally-Honest/http-server/internal/config"
 	"github.com/brutally-Honest/http-server/internal/request"
 )
 
@@ -16,6 +17,8 @@ type Response struct {
 	Body          []byte
 	headerWritten bool
 	chunked       bool
+	Conn          net.Conn
+	Cfg           *config.Config
 
 	hasContentLength bool
 	contentLength    int
@@ -24,12 +27,14 @@ type Response struct {
 	reqCtx  context.Context
 }
 
-func NewResponseWithContext(code int, connCtx, reqCtx context.Context) *Response {
+func NewResponseWithContext(code int, connCtx, reqCtx context.Context, conn net.Conn, cfg *config.Config) *Response {
 	return &Response{
 		StatusCode: code,
 		Headers:    map[string]string{},
 		connCtx:    connCtx,
 		reqCtx:     reqCtx,
+		Conn:       conn,
+		Cfg:        cfg,
 	}
 }
 

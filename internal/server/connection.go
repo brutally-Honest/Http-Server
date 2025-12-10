@@ -26,7 +26,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if reqErr != nil {
 			log.Println("connection: ", reqErr.Error())
 			cancelConn()
-			res := response.NewResponseWithContext(400, ctx, nil)
+			res := response.NewResponseWithContext(400, ctx, nil, conn, s.config)
 			res.Write([]byte("Bad Request"))
 			res.Flush(conn, nil, true)
 			conn.Close()
@@ -38,7 +38,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		handler, params, err := s.matcher.Match(req.Path)
 		if err != nil {
 			log.Println("router error: ", err.Error())
-			res := response.NewResponseWithContext(404, ctx, reqCtx)
+			res := response.NewResponseWithContext(404, ctx, reqCtx, conn, s.config)
 			res.Write([]byte("Not Found"))
 			conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
 			res.Flush(conn, req, false)
@@ -54,7 +54,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		req.Params = params
 		req.Context = reqCtx
 
-		res := response.NewResponseWithContext(200, ctx, reqCtx)
+		res := response.NewResponseWithContext(200, ctx, reqCtx, conn, s.config)
 		handler(req, res)
 		// temp route for chunked transfer encoding
 		if req.Path == "/stream" && req.Method == "GET" {
@@ -97,12 +97,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 		// TODO: Wrap the response with config for write timeout
-		conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
-		if err := res.Flush(conn, req, false); err != nil {
-			cancelReq()
-			conn.Close()
-			return
-		}
+		// conn.SetWriteDeadline(time.Now().Add(s.config.WriteTimeout))
+		// if err := res.Flush(conn, req, false); err != nil {
+		// 	cancelReq()
+		// 	conn.Close()
+		// 	return
+		// }
 		cancelReq()
 		if strings.ToLower(req.Headers["Connection"]) == "close" {
 			cancelConn()

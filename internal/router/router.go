@@ -75,7 +75,7 @@ func getSegmentType(segment string) nodeType {
 func (r *Router) Insert(segments []string, handler Handler) error {
 	curr := r.root
 
-	for _, segment := range segments {
+	for idx, segment := range segments {
 		segmentType := getSegmentType(segment)
 
 		switch segmentType {
@@ -88,7 +88,7 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			}
 			curr = curr.children[segment]
 		case param:
-			if curr.paramChild != nil {
+			if curr.paramChild == nil {
 				curr.paramChild = &Node{
 					children: make(map[string]*Node),
 					segement: segment,
@@ -98,7 +98,10 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			}
 			curr = curr.paramChild
 		case wildcard:
-			if curr.wildcardChild != nil {
+			if idx != len(segments)-1 {
+				return fmt.Errorf("invalid route: wildcard %s must be final segment", segment)
+			}
+			if curr.wildcardChild == nil {
 				curr.wildcardChild = &Node{
 					children: make(map[string]*Node),
 					segement: segment,
@@ -113,15 +116,14 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 	return nil
 }
 
-func (r *Router) GET(path string, handler Handler) error {
+func (r *Router) GET(path string, handler Handler) {
 	segments, err := splitPath(path)
 	if err != nil {
-		return err
+		panic(err)
 	}
 	if err := r.Insert(segments, handler); err != nil {
-		return err
+		panic(err.Error())
 	}
-	return nil
 }
 
 func (r *Router) Search(segments []string) (Handler, map[string]string) {
@@ -129,30 +131,28 @@ func (r *Router) Search(segments []string) (Handler, map[string]string) {
 	params := make(map[string]string)
 
 	for idx, segment := range segments {
-		segmentType := getSegmentType(segment)
-		switch segmentType {
-		case static:
-			if _, exists := curr.children[segment]; exists {
-				curr = curr.children[segment]
-				continue
-			}
-		case param:
-			if curr.paramChild != nil {
-				paramChild := curr.paramChild.segement[1:] //removing : from registered route
-				params[paramChild] = segment
-				curr = curr.paramChild
-				continue
-			}
-		case wildcard:
-			if curr.wildcardChild != nil {
-				wildcardChild := curr.wildcardChild.segement[1:]
-				params[wildcardChild] = strings.Join(segments[idx:], "/") //removing * from registered route
-				curr = curr.wildcardChild
-				continue
-			}
-		default:
-			return nil, nil
+
+		if _, exists := curr.children[segment]; exists {
+			curr = curr.children[segment]
+			continue
 		}
+
+		if curr.paramChild != nil {
+			paramChild := curr.paramChild.segement[1:] //removing : from registered route
+			params[paramChild] = segment
+			curr = curr.paramChild
+			continue
+		}
+
+		if curr.wildcardChild != nil {
+			wildcardChild := curr.wildcardChild.segement[1:]
+			params[wildcardChild] = strings.Join(segments[idx:], "/") //removing * from registered route
+			curr = curr.wildcardChild
+			break
+		}
+
+		return nil, nil
+
 	}
 	return curr.handler, params
 }
