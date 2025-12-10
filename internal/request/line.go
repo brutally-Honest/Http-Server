@@ -24,15 +24,15 @@ func parseRequestLine(headers []byte) (method, path, version string, err error) 
 	path = string(parts[1])
 	version = string(parts[2])
 
-	if validMethod, err := validateMethod(method); !validMethod {
+	if err := validateMethod(method); err != nil {
 		return "", "", "", err
 	}
 
-	if validPath, err := validatePath(path); !validPath {
+	if err := validatePath(path); err != nil {
 		return "", "", "", err
 	}
 
-	if validVersion, err := validateVersion(version); !validVersion {
+	if err := validateVersion(version); err != nil {
 		return "", "", "", err
 	}
 

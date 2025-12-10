@@ -1,7 +1,7 @@
 package server
 
 import (
-	"log"
+	"fmt"
 	"net"
 	"sync"
 
@@ -26,12 +26,12 @@ func NewServer(Addr string, config *config.Config) *Server {
 func (s *Server) ListenAndServe() error {
 	listener, err := net.Listen("tcp", s.Addr)
 	if err != nil {
-		log.Fatalf("Listening Socket Error : %v", err)
+		return fmt.Errorf("listening Socket Error : %v", err)
 	}
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("Connection Error : %v", err)
+			return fmt.Errorf("connection Error : %v", err)
 		}
 		go s.handleConnection(conn)
 	}

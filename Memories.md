@@ -12,3 +12,9 @@
 2. HTTP 1.1 supports pipelining, sequencing also, but the default behaviour of most modern clients is to close the connection after a single req–res cycle
 3. To test if requests reuse a connection using curl, use `--next` for multiple URLs.  
 This triggers HTTP/1.1 keep-alive sequencing (sequential request–response cycles on the same TCP connection).
+4. Transfer-encoding chunked in HTTP/1.1 is ~28 years old (HTTP/1.1 -> 1997, today 2025), almost three decades, still alive and kicking
+5. Lapse in understanding: Streaming ≠ SSE!
+Its a protocol on top of HTTP which deals with UTF-8 only and requires a very specific event-stream format (headers + body)
+6. Request can only be cancelled by server with connection still alive, its only connection close from the client
+7. Always cancel contexts that you create to prevent memory leaks and free up resources
+8. Finally DSA applicable in major section (Trie for routing)
