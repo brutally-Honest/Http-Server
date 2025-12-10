@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/brutally-Honest/http-server/internal/config"
+	"github.com/brutally-Honest/http-server/internal/router"
 	"github.com/brutally-Honest/http-server/internal/server"
 )
 
@@ -24,6 +25,8 @@ func main() {
 		ReadTimeout,
 		WriteTimeout,
 	)
-	s := server.NewServer(":1783", cfg)
+
+	r := router.NewRouter()
+	s := server.NewServer(":1783", cfg, r)
 	log.Fatal(s.ListenAndServe())
 }
