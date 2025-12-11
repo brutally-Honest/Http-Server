@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/brutally-Honest/http-server/internal/config"
+	"github.com/brutally-Honest/http-server/internal/router"
 )
 
 type Server struct {
@@ -14,12 +15,14 @@ type Server struct {
 	running  bool
 	mu       sync.Mutex
 	config   *config.Config
+	matcher  router.RouteMatcher
 }
 
-func NewServer(Addr string, config *config.Config) *Server {
+func NewServer(Addr string, config *config.Config, router router.RouteMatcher) *Server {
 	return &Server{
-		Addr:   Addr,
-		config: config,
+		Addr:    Addr,
+		config:  config,
+		matcher: router,
 	}
 }
 

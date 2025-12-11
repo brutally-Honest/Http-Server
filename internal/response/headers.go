@@ -3,7 +3,6 @@ package response
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 )
@@ -39,12 +38,12 @@ func (r *Response) WriteHeader(code int) error {
 	return nil
 }
 
-func (r *Response) writeHeaders(conn net.Conn) error {
+func (r *Response) writeHeaders() error {
 	statusText := getStatusText(r.StatusCode)
 	if statusText == "Unknown" {
 		return errors.New("invalid status code")
 	}
-	if _, err := fmt.Fprintf(conn, "HTTP/1.1 %d %s\r\n", r.StatusCode, statusText); err != nil {
+	if _, err := fmt.Fprintf(r.Conn, "HTTP/1.1 %d %s\r\n", r.StatusCode, statusText); err != nil {
 		return err
 	}
 
@@ -58,12 +57,12 @@ func (r *Response) writeHeaders(conn net.Conn) error {
 
 	for k, v := range r.Headers {
 		header := fmt.Sprintf("%s: %s\r\n", k, v)
-		if err := safeWriteString(conn, header); err != nil {
+		if err := safeWriteString(r.Conn, header); err != nil {
 			return err
 		}
 	}
 
-	if err := safeWriteString(conn, "\r\n"); err != nil {
+	if err := safeWriteString(r.Conn, "\r\n"); err != nil {
 		return err
 	}
 
