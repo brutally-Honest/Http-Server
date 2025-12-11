@@ -11,7 +11,8 @@ import (
 type Handler func(req *request.Request, res *response.Response)
 
 type RouteMatcher interface {
-	Match(path string) (Handler, map[string]string, error)
+	Match(method, path string) (Handler, map[string]string, error)
+	Register(method, path string, handler Handler)
 }
 
 type Node struct {
@@ -19,7 +20,7 @@ type Node struct {
 	children      map[string]*Node
 	paramChild    *Node
 	wildcardChild *Node
-	handler       Handler
+	handlers      map[string]Handler
 }
 
 type Router struct {
@@ -30,6 +31,7 @@ func NewRouter() *Router {
 	return &Router{
 		root: &Node{
 			children: make(map[string]*Node),
+			handlers: make(map[string]Handler),
 		},
 	}
 }
@@ -72,7 +74,7 @@ func getSegmentType(segment string) nodeType {
 	}
 }
 
-func (r *Router) Insert(segments []string, handler Handler) error {
+func (r *Router) insert(method string, segments []string, handler Handler) error {
 	curr := r.root
 
 	for idx, segment := range segments {
@@ -83,6 +85,7 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			if _, exists := curr.children[segment]; !exists {
 				curr.children[segment] = &Node{
 					children: make(map[string]*Node),
+					handlers: make(map[string]Handler),
 					segement: segment,
 				}
 			}
@@ -91,6 +94,7 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			if curr.paramChild == nil {
 				curr.paramChild = &Node{
 					children: make(map[string]*Node),
+					handlers: make(map[string]Handler),
 					segement: segment,
 				}
 			} else if curr.paramChild.segement != segment {
@@ -104,6 +108,7 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			if curr.wildcardChild == nil {
 				curr.wildcardChild = &Node{
 					children: make(map[string]*Node),
+					handlers: make(map[string]Handler),
 					segement: segment,
 				}
 			} else if curr.wildcardChild.segement != segment {
@@ -112,21 +117,41 @@ func (r *Router) Insert(segments []string, handler Handler) error {
 			curr = curr.wildcardChild
 		}
 	}
-	curr.handler = handler
+	if curr.handlers[method] != nil {
+		return fmt.Errorf("handler already registered for %s %s", method, segments)
+	}
+
+	curr.handlers[method] = handler
 	return nil
 }
 
-func (r *Router) GET(path string, handler Handler) {
+func (r *Router) Register(method, path string, handler Handler) {
 	segments, err := splitPath(path)
 	if err != nil {
 		panic(err)
 	}
-	if err := r.Insert(segments, handler); err != nil {
+	if err := r.insert(method, segments, handler); err != nil {
 		panic(err.Error())
 	}
 }
 
-func (r *Router) Search(segments []string) (Handler, map[string]string) {
+func (r *Router) GET(path string, handler Handler) {
+	r.Register("GET", path, handler)
+}
+
+func (r *Router) POST(path string, handler Handler) {
+	r.Register("POST", path, handler)
+}
+
+func (r *Router) PUT(path string, handler Handler) {
+	r.Register("PUT", path, handler)
+}
+
+func (r *Router) DELETE(path string, handler Handler) {
+	r.Register("DELETE", path, handler)
+}
+
+func (r *Router) search(method string, segments []string) (Handler, map[string]string) {
 	curr := r.root
 	params := make(map[string]string)
 
@@ -154,16 +179,21 @@ func (r *Router) Search(segments []string) (Handler, map[string]string) {
 		return nil, nil
 
 	}
-	return curr.handler, params
+	handler := curr.handlers[method]
+	if handler == nil {
+		return nil, nil
+	}
+
+	return handler, params
 }
 
-func (r *Router) Match(path string) (Handler, map[string]string, error) {
+func (r *Router) Match(method, path string) (Handler, map[string]string, error) {
 	segments, err := splitPath(path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	handler, params := r.Search(segments)
+	handler, params := r.search(method, segments)
 	if handler == nil {
 		return nil, nil, fmt.Errorf("route not found")
 	}

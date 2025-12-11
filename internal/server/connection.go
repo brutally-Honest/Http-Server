@@ -34,7 +34,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		reqCtx, cancelReq := context.WithCancel(ctx)
 
-		handler, params, err := s.matcher.Match(req.Path)
+		handler, params, err := s.matcher.Match(req.Method, req.Path)
 		if err != nil {
 			log.Println("router error: ", err.Error())
 			res := response.NewResponseWithContext(404, ctx, reqCtx, conn, s.config)

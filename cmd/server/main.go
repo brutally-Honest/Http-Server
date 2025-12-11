@@ -48,11 +48,17 @@ func main() {
 		res.Write([]byte(output))
 		res.Flush(req, false)
 	})
-	r.GET("/api/wildcard/*anything/something", func(req *request.Request, res *response.Response) {
+	r.GET("/api/wildcard/*anything", func(req *request.Request, res *response.Response) {
 		wildcard := req.Params["anything"]
 
 		output := fmt.Sprintf("wild path %s", wildcard)
 		res.Write([]byte(output))
+		res.Flush(req, false)
+	})
+	r.POST("/api/wake-up", func(req *request.Request, res *response.Response) {
+		log.Print(string(req.Body))
+		//simulating something created
+		res.WriteHeader(201)
 		res.Flush(req, false)
 	})
 
