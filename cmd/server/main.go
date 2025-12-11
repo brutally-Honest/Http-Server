@@ -32,13 +32,13 @@ func main() {
 	r := router.NewRouter()
 	r.GET("/api/static", func(req *request.Request, res *response.Response) {
 		res.Write([]byte("WOHOO !!! It is working"))
-		res.Flush(res.Conn, req, false)
+		res.Flush(req, false)
 	})
 	r.GET("/api/param/:id", func(req *request.Request, res *response.Response) {
 		id := req.Params["id"]
 		output := fmt.Sprintf("Id %s", id)
 		res.Write([]byte(output))
-		res.Flush(res.Conn, req, false)
+		res.Flush(req, false)
 	})
 	r.GET("/api/param/:id/profile/:name", func(req *request.Request, res *response.Response) {
 		id := req.Params["id"]
@@ -46,14 +46,14 @@ func main() {
 
 		output := fmt.Sprintf("Id %s Name %s", id, name)
 		res.Write([]byte(output))
-		res.Flush(res.Conn, req, false)
+		res.Flush(req, false)
 	})
 	r.GET("/api/wildcard/*anything/something", func(req *request.Request, res *response.Response) {
 		wildcard := req.Params["anything"]
 
 		output := fmt.Sprintf("wild path %s", wildcard)
 		res.Write([]byte(output))
-		res.Flush(res.Conn, req, false)
+		res.Flush(req, false)
 	})
 
 	s := server.NewServer(":1783", cfg, r)

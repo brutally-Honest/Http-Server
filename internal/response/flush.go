@@ -2,7 +2,6 @@ package response
 
 import (
 	"errors"
-	"net"
 
 	"github.com/brutally-Honest/http-server/internal/request"
 )
@@ -24,7 +23,7 @@ func (r *Response) Write(b []byte) error {
 	return nil
 }
 
-func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose bool) error {
+func (r *Response) Flush(req *request.Request, serverWantsClose bool) error {
 	if r.chunked {
 		return errors.New("use WriteChunk + EndChunked for streaming responses")
 	}
@@ -40,7 +39,7 @@ func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose b
 	connHeader := determineConnectionHeader(req, serverWantsClose)
 	r.Headers["Connection"] = connHeader
 
-	if err := r.writeHeaders(conn); err != nil {
+	if err := r.writeHeaders(); err != nil {
 		return err
 	}
 
@@ -52,7 +51,7 @@ func (r *Response) Flush(conn net.Conn, req *request.Request, serverWantsClose b
 		return err
 	}
 
-	if _, err := safeWrite(conn, r.Body); err != nil {
+	if _, err := safeWrite(r.Conn, r.Body); err != nil {
 		return err
 	}
 	return nil

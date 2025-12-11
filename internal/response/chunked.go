@@ -3,10 +3,9 @@ package response
 import (
 	"errors"
 	"fmt"
-	"net"
 )
 
-func (r *Response) WriteChunk(conn net.Conn, data []byte) error {
+func (r *Response) WriteChunk(data []byte) error {
 	if !r.chunked {
 		return errors.New("chunked encoding is not enabled")
 	}
@@ -17,7 +16,7 @@ func (r *Response) WriteChunk(conn net.Conn, data []byte) error {
 
 	if !r.headerWritten {
 		// write headers before first chunk
-		if err := r.writeHeaders(conn); err != nil {
+		if err := r.writeHeaders(); err != nil {
 			return err
 		}
 		r.headerWritten = true
@@ -26,22 +25,22 @@ func (r *Response) WriteChunk(conn net.Conn, data []byte) error {
 	// chunk size in hex
 	size := fmt.Sprintf("%x\r\n", len(data))
 
-	if err := safeWriteString(conn, size); err != nil {
+	if err := safeWriteString(r.Conn, size); err != nil {
 		return err
 	}
 
-	if _, err := safeWrite(conn, data); err != nil {
+	if _, err := safeWrite(r.Conn, data); err != nil {
 		return err
 	}
 
-	if err := safeWriteString(conn, "\r\n"); err != nil {
+	if err := safeWriteString(r.Conn, "\r\n"); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *Response) EndChunked(conn net.Conn) error {
+func (r *Response) EndChunked() error {
 	if !r.chunked {
 		return errors.New("not chunked response")
 	}
@@ -50,5 +49,5 @@ func (r *Response) EndChunked(conn net.Conn) error {
 		return err
 	}
 
-	return safeWriteString(conn, "0\r\n\r\n")
+	return safeWriteString(r.Conn, "0\r\n\r\n")
 }
