@@ -1,7 +1,7 @@
 # HTTP Server from Scratch (Go)
 
-A low-level HTTP/1.0 and HTTP/1.1 server built directly on top of TCP sockets,
-without using `net/http`.
+Raw TCP → HTTP server (HTTP/1.0 and HTTP/1.1)  
+No `net/http`
 
 This project is **not a framework or a showcase**.  
 It exists to remove ambiguity about how HTTP actually works under the hood.
@@ -59,7 +59,7 @@ Correctness and clarity mattered more than completeness.
 - Streaming semantics:
   - client → server
   - server → client
-- SSE:
+- SSE (Server-Sent Events):
   - built on HTTP streaming
   - UTF-8 only
   - text/event-stream framing
@@ -104,7 +104,6 @@ These are enforced explicitly and not hardcoded.
 ### Go-specific learnings
 - Context usage:
   - cancellation
-  - timeouts
   - request lifecycle propagation
 - Error handling across streaming boundaries
 - Writing network code without `net/http`
@@ -166,19 +165,19 @@ These are enforced explicitly and not hardcoded.
 - Compression (gzip, brotli)
 - Trailer headers
 - `Expect: 100-continue`
+- Middleware chaining
+- JSON handling
+- File uploads and downloads
 
 This project favors understanding protocol mechanics over RFC completeness.
 
 ---
 
-## Known gaps / future exploration
+## Potential improvements
 
 - Graceful shutdown with signal fan-out
 - Explicit connection and request state machines
 - `bufio.Reader` / `Writer` via interfaces
-- Middleware chaining
-- JSON handling
-- File uploads and downloads
 - Parser fuzz testing
 - Deeper Go concurrency patterns (channels, worker models)
 
