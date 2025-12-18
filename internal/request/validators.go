@@ -2,6 +2,7 @@ package request
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -10,7 +11,7 @@ func validateMethod(method string) error {
 	case "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH":
 		return nil
 	default:
-		return errors.New("invalid http method")
+		return fmt.Errorf("invalid http method: %q", method)
 	}
 }
 
