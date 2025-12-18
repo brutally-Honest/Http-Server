@@ -128,7 +128,8 @@ These are enforced explicitly and not hardcoded.
     │   └── config.go
     ├── server/
     │   ├── server.go
-    │   └── connection.go
+    |   ├── connection.go
+    │   └── handler.go
     ├── router/
     │   └── router.go
     ├── request/
