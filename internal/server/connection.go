@@ -17,7 +17,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer cancelConn()
 
 	for {
-		if handleRequest(conn, s, ctx, cancelConn) {
+		if handleRequest(conn, s, ctx) {
 			conn.Close()
 			return
 		}

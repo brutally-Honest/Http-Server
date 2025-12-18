@@ -2,11 +2,18 @@ package response
 
 import (
 	"errors"
+	"time"
 
 	"github.com/brutally-Honest/http-server/internal/request"
 )
 
-func (r *Response) Write(b []byte) error {
+func (r *Response) Write(b []byte) (err error) {
+	defer func() {
+		if err != nil {
+			r.writeErr = err
+		}
+	}()
+
 	if r.chunked {
 		return errors.New("cannot use Write() when chunked encoding is enabled; use WriteChunk()")
 	}
@@ -23,12 +30,18 @@ func (r *Response) Write(b []byte) error {
 	return nil
 }
 
-func (r *Response) Flush(req *request.Request, serverWantsClose bool) error {
+func (r *Response) Flush(req *request.Request, serverWantsClose bool) (err error) {
+	defer func() {
+		if err != nil {
+			r.writeErr = err
+		}
+	}()
+
 	if r.chunked {
 		return errors.New("use WriteChunk + EndChunked for streaming responses")
 	}
 
-	if err := r.checkCancel(); err != nil {
+	if err = r.checkCancel(); err != nil {
 		return err
 	}
 
@@ -39,7 +52,7 @@ func (r *Response) Flush(req *request.Request, serverWantsClose bool) error {
 	connHeader := determineConnectionHeader(req, serverWantsClose)
 	r.Headers["Connection"] = connHeader
 
-	if err := r.writeHeaders(); err != nil {
+	if err = r.writeHeaders(); err != nil {
 		return err
 	}
 
@@ -47,11 +60,14 @@ func (r *Response) Flush(req *request.Request, serverWantsClose bool) error {
 		return errors.New("actual body size does not match Content-Length")
 	}
 
-	if err := r.checkCancel(); err != nil {
+	if err = r.checkCancel(); err != nil {
 		return err
 	}
 
-	if _, err := safeWrite(r.Conn, r.Body); err != nil {
+	// write deadline before writing
+	r.Conn.SetWriteDeadline(time.Now().Add(r.Cfg.WriteTimeout))
+
+	if _, err = safeWrite(r.Conn, r.Body); err != nil {
 		return err
 	}
 	return nil

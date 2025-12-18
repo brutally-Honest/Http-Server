@@ -25,6 +25,8 @@ type Response struct {
 
 	connCtx context.Context
 	reqCtx  context.Context
+
+	writeErr error
 }
 
 func NewResponseWithContext(code int, connCtx, reqCtx context.Context, conn net.Conn, cfg *config.Config) *Response {
@@ -111,4 +113,8 @@ func (r *Response) checkCancel() error {
 	}
 
 	return nil
+}
+
+func (r *Response) HasError() bool {
+	return r.writeErr != nil
 }

@@ -62,6 +62,25 @@ func main() {
 		res.Flush(req, false)
 	})
 
+	r.GET("/stream", func(req *request.Request, res *response.Response) {
+		res.SetHeader("Content-Type", "text/plain")
+		res.SetHeader("Transfer-Encoding", "chunked")
+
+		chunks := []string{"Testing\n", "Transfer\n", "Encoding\n", "With\n", "HTTP\n", "1.1\n"}
+
+		for _, chunk := range chunks {
+			if err := res.WriteChunk([]byte(chunk)); err != nil {
+				log.Printf("WriteChunk failed: %v", err)
+				return
+			}
+		}
+
+		if err := res.EndChunked(); err != nil {
+			log.Printf("EndChunked failed: %v", err)
+			return
+		}
+	})
+
 	s := server.NewServer(":1783", cfg, r)
 	log.Fatal(s.ListenAndServe())
 }
