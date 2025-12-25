@@ -2,7 +2,6 @@ package response
 
 import (
 	"errors"
-	"time"
 
 	"github.com/brutally-Honest/http-server/internal/request"
 )
@@ -37,6 +36,10 @@ func (r *Response) Flush(req *request.Request, serverWantsClose bool) (err error
 		}
 	}()
 
+	if r.flushed {
+		return nil
+	}
+
 	if r.chunked {
 		return errors.New("use WriteChunk + EndChunked for streaming responses")
 	}
@@ -52,6 +55,8 @@ func (r *Response) Flush(req *request.Request, serverWantsClose bool) (err error
 	connHeader := determineConnectionHeader(req, serverWantsClose)
 	r.Headers["Connection"] = connHeader
 
+	r.setWriteDeadlineOnce()
+
 	if err = r.writeHeaders(); err != nil {
 		return err
 	}
@@ -64,11 +69,16 @@ func (r *Response) Flush(req *request.Request, serverWantsClose bool) (err error
 		return err
 	}
 
-	// write deadline before writing
-	r.Conn.SetWriteDeadline(time.Now().Add(r.Cfg.WriteTimeout))
-
-	if _, err = safeWrite(r.Conn, r.Body); err != nil {
+	// write to buffer
+	if _, err = r.writer.Write(r.Body); err != nil {
 		return err
 	}
+
+	// Flush buffer to network
+	if err = r.writer.Flush(); err != nil {
+		return err
+	}
+	r.flushed = true
+
 	return nil
 }

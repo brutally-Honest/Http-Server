@@ -43,7 +43,7 @@ func (r *Response) writeHeaders() error {
 	if statusText == "Unknown" {
 		return errors.New("invalid status code")
 	}
-	if _, err := fmt.Fprintf(r.Conn, "HTTP/1.1 %d %s\r\n", r.StatusCode, statusText); err != nil {
+	if _, err := fmt.Fprintf(r.writer, "HTTP/1.1 %d %s\r\n", r.StatusCode, statusText); err != nil {
 		return err
 	}
 
@@ -56,13 +56,12 @@ func (r *Response) writeHeaders() error {
 	}
 
 	for k, v := range r.Headers {
-		header := fmt.Sprintf("%s: %s\r\n", k, v)
-		if err := safeWriteString(r.Conn, header); err != nil {
+		if _, err := fmt.Fprintf(r.writer, "%s: %s\r\n", k, v); err != nil {
 			return err
 		}
 	}
 
-	if err := safeWriteString(r.Conn, "\r\n"); err != nil {
+	if _, err := r.writer.WriteString("\r\n"); err != nil {
 		return err
 	}
 

@@ -3,7 +3,6 @@ package response
 import (
 	"errors"
 	"fmt"
-	"time"
 )
 
 func (r *Response) WriteChunk(data []byte) (err error) {
@@ -22,6 +21,7 @@ func (r *Response) WriteChunk(data []byte) (err error) {
 	}
 
 	if !r.headerWritten {
+		r.setWriteDeadlineOnce()
 		// write headers before first chunk
 		if err = r.writeHeaders(); err != nil {
 			return err
@@ -29,21 +29,15 @@ func (r *Response) WriteChunk(data []byte) (err error) {
 		r.headerWritten = true
 	}
 
-	// write deadline before writing
-	r.Conn.SetWriteDeadline(time.Now().Add(r.Cfg.WriteTimeout))
-
-	// chunk size in hex
-	size := fmt.Sprintf("%x\r\n", len(data))
-
-	if err = safeWriteString(r.Conn, size); err != nil {
+	if _, err = fmt.Fprintf(r.writer, "%x\r\n", len(data)); err != nil {
 		return err
 	}
 
-	if _, err = safeWrite(r.Conn, data); err != nil {
+	if _, err = r.writer.Write(data); err != nil {
 		return err
 	}
 
-	if err = safeWriteString(r.Conn, "\r\n"); err != nil {
+	if _, err = r.writer.WriteString("\r\n"); err != nil {
 		return err
 	}
 
@@ -64,9 +58,24 @@ func (r *Response) EndChunked() (err error) {
 	if err = r.checkCancel(); err != nil {
 		return err
 	}
+	r.setWriteDeadlineOnce()
+	if _, err = r.writer.WriteString("0\r\n\r\n"); err != nil {
+		return err
+	}
+	return r.writer.Flush()
+}
 
-	// write deadline before writing
-	r.Conn.SetWriteDeadline(time.Now().Add(r.Cfg.WriteTimeout))
+// gives users control over when to send data (like net/http's Flusher)
+func (r *Response) FlushChunk() (err error) {
+	if !r.chunked {
+		return errors.New("not a chunked response")
+	}
 
-	return safeWriteString(r.Conn, "0\r\n\r\n")
+	if err := r.checkCancel(); err != nil {
+		return err
+	}
+
+	r.setWriteDeadlineOnce()
+
+	return r.writer.Flush()
 }

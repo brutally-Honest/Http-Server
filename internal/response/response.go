@@ -1,11 +1,13 @@
 package response
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/brutally-Honest/http-server/internal/config"
 	"github.com/brutally-Honest/http-server/internal/request"
@@ -19,6 +21,7 @@ type Response struct {
 	chunked       bool
 	Conn          net.Conn
 	Cfg           *config.Config
+	writer        *bufio.Writer
 
 	hasContentLength bool
 	contentLength    int
@@ -26,7 +29,9 @@ type Response struct {
 	connCtx context.Context
 	reqCtx  context.Context
 
-	writeErr error
+	writeErr    error
+	deadlineSet bool
+	flushed     bool
 }
 
 func NewResponseWithContext(code int, connCtx, reqCtx context.Context, conn net.Conn, cfg *config.Config) *Response {
@@ -36,6 +41,7 @@ func NewResponseWithContext(code int, connCtx, reqCtx context.Context, conn net.
 		connCtx:    connCtx,
 		reqCtx:     reqCtx,
 		Conn:       conn,
+		writer:     bufio.NewWriter(conn),
 		Cfg:        cfg,
 	}
 }
@@ -117,4 +123,11 @@ func (r *Response) checkCancel() error {
 
 func (r *Response) HasError() bool {
 	return r.writeErr != nil
+}
+
+func (r *Response) setWriteDeadlineOnce() {
+	if !r.deadlineSet {
+		r.Conn.SetWriteDeadline(time.Now().Add(r.Cfg.WriteTimeout))
+		r.deadlineSet = true
+	}
 }
