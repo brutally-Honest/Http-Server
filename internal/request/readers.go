@@ -1,54 +1,42 @@
 package request
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"io"
-	"log"
-	"net"
 
 	"github.com/brutally-Honest/http-server/internal/config"
 )
 
-func safeRead(conn net.Conn, buffer []byte) (int, error) {
-	n, err := conn.Read(buffer)
-	if err != nil {
-		if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-			log.Printf("safe read: connection closed by client")
-			return n, ErrConnectionClosed
-		}
-
-		log.Printf("read error: %v", err)
-		return n, err
-	}
-	return n, nil
-}
-
-// read until \r\n\r\n is found
-func readHeaders(conn net.Conn, cfg *config.Config, buffer []byte) ([]byte, []byte, error) {
+func readHeaders(reader *bufio.Reader, cfg *config.Config) ([]byte, error) {
+	delimiter := []byte("\r\n\r\n")
 	headers := make([]byte, 0, cfg.HeaderLimit)
 	for {
-		streamLength, err := safeRead(conn, buffer)
+		line, err := reader.ReadSlice('\n')
 		if err != nil {
-			return nil, nil, err
+			if err == bufio.ErrBufferFull {
+				// Line too long
+				return nil, errors.New("header line too long")
+			}
+			if err == io.EOF {
+				return nil, ErrConnectionClosed
+			}
+			return nil, err
+		}
+		if len(headers)+len(line) > cfg.HeaderLimit {
+			return nil, ErrHeaderLimitExceeded
 		}
 
-		if len(headers)+streamLength > cfg.HeaderLimit {
-			log.Printf("header limit exceeded")
-			return nil, nil, ErrHeaderLimitExceeded
-		}
-
-		headers = append(headers, buffer[:streamLength]...)
-
-		if idx := bytes.Index(headers, []byte("\r\n\r\n")); idx != -1 {
-			headerEnd := idx + 4
-			return headers[:idx], headers[headerEnd:], nil
+		headers = append(headers, line...)
+		if bytes.HasSuffix(headers, delimiter) {
+			// Remove the \r\n\r\n delimiter from the end
+			return headers[:len(headers)-4], nil
 		}
 	}
 }
 
-// read based on Content-Length
-func readBody(conn net.Conn, cfg *config.Config, contentLength int, buffer []byte) ([]byte, error) {
+func readBody(reader *bufio.Reader, cfg *config.Config, contentLength int) ([]byte, error) {
 	if contentLength == 0 {
 		return nil, nil
 	}
@@ -57,24 +45,14 @@ func readBody(conn net.Conn, cfg *config.Config, contentLength int, buffer []byt
 		return nil, ErrBodyLimitExceeded
 	}
 
-	body := make([]byte, 0, contentLength)
+	body := make([]byte, contentLength)
 
-	for len(body) < contentLength {
-		n, err := safeRead(conn, buffer)
-		if err != nil {
-			return nil, err
+	_, err := io.ReadFull(reader, body)
+	if err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return nil, ErrConnectionClosed
 		}
-
-		if len(body)+n > cfg.BodyLimit {
-			return nil, ErrBodyLimitExceeded
-		}
-
-		remaining := contentLength - len(body)
-		if n > remaining {
-			n = remaining
-		}
-
-		body = append(body, buffer[:n]...)
+		return nil, err
 	}
 
 	return body, nil

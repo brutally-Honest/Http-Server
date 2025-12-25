@@ -1,6 +1,7 @@
 package request
 
 import (
+	"bufio"
 	"errors"
 	"log"
 	"net"
@@ -9,13 +10,12 @@ import (
 	"github.com/brutally-Honest/http-server/internal/config"
 )
 
-func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
+func ParseRequest(conn net.Conn, reader *bufio.Reader, cfg *config.Config) (*Request, error) {
 
 	conn.SetReadDeadline(time.Now().Add(cfg.ReadTimeout))
-	buffer := make([]byte, cfg.BufferLimit)
 	var contentLength int
 
-	headersRaw, leftover, err := readHeaders(conn, cfg, buffer)
+	headersRaw, err := readHeaders(reader, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -61,20 +61,13 @@ func ParseRequest(conn net.Conn, cfg *config.Config) (*Request, error) {
 		return nil, ErrBodyLimitExceeded
 	}
 
-	body := make([]byte, len(leftover))
-	copy(body, leftover)
-
-	if need := contentLength - len(body); need > 0 {
-		more, err := readBody(conn, cfg, need, buffer)
-		if err != nil {
-			return nil, err
-		}
-		body = append(body, more...)
+	body, err := readBody(reader, cfg, contentLength)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Printf("Headers: %d bytes", len(headersRaw)+4)
 	log.Printf("Content Length: %d", contentLength)
-	log.Printf("Body: %d bytes", len(body))
 	log.Printf("Total Request: %d bytes", len(headersRaw)+4+len(body))
 
 	return &Request{

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"net"
@@ -10,8 +11,9 @@ import (
 	"github.com/brutally-Honest/http-server/internal/response"
 )
 
-func handleRequest(conn net.Conn, s *Server, ctx context.Context) bool {
-	req, reqErr := request.ParseRequest(conn, s.config)
+func handleRequest(conn net.Conn, reader *bufio.Reader, s *Server, ctx context.Context) bool {
+
+	req, reqErr := request.ParseRequest(conn, reader, s.config)
 	if reqErr != nil {
 		log.Println("parse error: ", reqErr.Error())
 		res := response.NewResponseWithContext(400, ctx, nil, conn, s.config)

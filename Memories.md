@@ -18,3 +18,6 @@ Its a protocol on top of HTTP which deals with UTF-8 only and requires a very sp
 6. Request can only be cancelled by server with connection still alive, its only connection close from the client
 7. Always cancel contexts that you create to prevent memory leaks and free up resources
 8. Finally DSA applicable in major section (Trie for routing)
+9. use bufio.Reader for any streaming implementaion , be it sockets , files , network. It reads N bytes at once leading to fewer syscalls,
+which results in better performance. It also provides higher-level read primitives (lines, delimiters, peek). Also there is no leftover handling
+

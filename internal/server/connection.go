@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"net"
@@ -16,8 +17,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 	ctx, cancelConn := context.WithCancel(context.Background())
 	defer cancelConn()
 
+	// per connection buffer
+	reader := bufio.NewReaderSize(conn, s.config.ReadBufferSize)
 	for {
-		if handleRequest(conn, s, ctx) {
+		if handleRequest(conn, reader, s, ctx) {
 			conn.Close()
 			return
 		}
