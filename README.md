@@ -177,7 +177,6 @@ This project favors understanding protocol mechanics over RFC completeness.
 
 - Graceful shutdown with signal fan-out
 - Explicit connection and request state machines
-- `bufio.Reader` / `Writer` via interfaces
 - Parser fuzz testing
 - Deeper Go concurrency patterns (channels, worker models)
 
