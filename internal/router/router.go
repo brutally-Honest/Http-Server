@@ -16,7 +16,7 @@ type RouteMatcher interface {
 }
 
 type Node struct {
-	segement      string
+	segment       string
 	children      map[string]*Node
 	paramChild    *Node
 	wildcardChild *Node
@@ -57,7 +57,7 @@ func splitPath(path string) ([]string, error) {
 
 	for _, segment := range segments {
 		if segment == "" {
-			return nil, fmt.Errorf("invalid segement in path")
+			return nil, fmt.Errorf("invalid segment in path")
 		}
 	}
 	return segments, nil
@@ -86,7 +86,7 @@ func (r *Router) insert(method string, segments []string, handler Handler) error
 				curr.children[segment] = &Node{
 					children: make(map[string]*Node),
 					handlers: make(map[string]Handler),
-					segement: segment,
+					segment:  segment,
 				}
 			}
 			curr = curr.children[segment]
@@ -95,9 +95,9 @@ func (r *Router) insert(method string, segments []string, handler Handler) error
 				curr.paramChild = &Node{
 					children: make(map[string]*Node),
 					handlers: make(map[string]Handler),
-					segement: segment,
+					segment:  segment,
 				}
-			} else if curr.paramChild.segement != segment {
+			} else if curr.paramChild.segment != segment {
 				return fmt.Errorf("conflicting param route")
 			}
 			curr = curr.paramChild
@@ -109,9 +109,9 @@ func (r *Router) insert(method string, segments []string, handler Handler) error
 				curr.wildcardChild = &Node{
 					children: make(map[string]*Node),
 					handlers: make(map[string]Handler),
-					segement: segment,
+					segment:  segment,
 				}
-			} else if curr.wildcardChild.segement != segment {
+			} else if curr.wildcardChild.segment != segment {
 				return fmt.Errorf("conflicting wildcard route")
 			}
 			curr = curr.wildcardChild
@@ -163,14 +163,14 @@ func (r *Router) search(method string, segments []string) (Handler, map[string]s
 		}
 
 		if curr.paramChild != nil {
-			paramChild := curr.paramChild.segement[1:] //removing : from registered route
+			paramChild := curr.paramChild.segment[1:] //removing : from registered route
 			params[paramChild] = segment
 			curr = curr.paramChild
 			continue
 		}
 
 		if curr.wildcardChild != nil {
-			wildcardChild := curr.wildcardChild.segement[1:]
+			wildcardChild := curr.wildcardChild.segment[1:]
 			params[wildcardChild] = strings.Join(segments[idx:], "/") //removing * from registered route
 			curr = curr.wildcardChild
 			break
